@@ -15,7 +15,9 @@ var _sp;
 var _arduinoSerial;
 var _bufferHold="";
 var _board;
-var _ch;
+var _chfl;
+var _baud;
+var _chser;
 
 
 console.log('im alive and well...');
@@ -32,43 +34,57 @@ chrome.runtime.onMessageExternal.addListener(
   });
 
 chrome.runtime.onConnectExternal.addListener(function(ch) {
-    _ch=ch;
-    _ch.onMessage.addListener(function(msg) {
-        
-        switch(msg.success){
-            case true:
-                packageForFlash(msg);
-                break;
-
-            default:
-                return null;
-        }
-    });
     
-    switch(_ch.name){
+    ch.onMessage.addListener(function(msg) {
+        
+    switch(msg.success){
+        case true:
+            packageForFlash(msg);
+            break;
+
+        default:
+            break;
+        }
+        });
+    
+    
+    switch(ch.name){
         case "toFlash":
             console.log("got a flash request");
-            if(_sp){
-                _sp.close();   
-            }
-            _ch.postMessage({reply: "Ready to recieve compiled code"});
+            _chfl = ch;
+
+                if(_sp && _sp.isOpen){
+                    try{
+                        _sp.close(onClose);
+                    }
+                    catch(err){
+                      console.log(err);  
+                    }
+                }
+                
+            
+            _chfl.postMessage({reply: "Ready to recieve compiled code"});
             break;
             
         case "serialConnect":
-            _ch.postMessage({reply: "Now opening serial port."});
-            getPort(openSerial);
+            _chser=ch;
+            _chser.postMessage({reply: "Now opening serial port."});
+            getPort(openSerial,_chser);
             break;
             
         
         case "serialClose":
-            if(_sp){
-                _sp.close();
-                _ch=null;    
+            _chser=ch;
+            console.log('closing serial now');
+            try {
+                _sp.close(onClose);
+            }
+            catch(err){
+                
             }
             break;
             
         default: 
-            return null;
             break;
     }
 });
@@ -77,14 +93,14 @@ chrome.runtime.onConnectExternal.addListener(function(ch) {
 /*
  * General functions
  */
-function getPort(callback){
+function getPort(callback,chan){
   Avrgirl.list(function(err, ports) {
   console.log(ports);
   if(err){
-      _ch.postMessage({reply: err});
+      chan.postMessage({reply: err});
   }
   else{
-      _ch.postMessage({reply: "retrieving list of ports"});
+      chan.postMessage({reply: "retrieving list of ports"});
   }
   var port;
   for (i=0; i< ports.length; ++i){
@@ -92,43 +108,54 @@ function getPort(callback){
           port=ports[i];
           callback(port.comName);
       }
+      
   }
+  if(!port){
+          chan.postMessage({reply: "unable to find an arduino"});
+      }
   
 });  
 };
 
 function packageForFlash(msg){
-    _ch.postMessage({reply: "Sending compiled code to Arduino"});
+    console.log('package4Flash triggered');
+    _chfl.postMessage({reply: "Sending compiled code to Arduino with board " + msg.avrgName});
      data=msg.output;
-     hex = intel_hex.parse(data).data;
+     //console.log(data);
+     //hex = intel_hex.parse(data).data;
+     hex = data;
      if (msg.avrgName !=null) {
          _board=msg.avrgName;
      }
      else{
          _board='uno';
      }
-     getPort(flash);
+     console.log(_board);
+     getPort(flash,_chfl);
+     
 };
 
 
-function flash(portName){
 
+function flash(portName){
+    console.log('flash triggered');
+    
     avrgirl = new Avrgirl({
         board: _board,
         port: portName,
         debug: true
     });
-    _ch.postMessage({reply: "Attempting to flash with AVRGirl"});
+    _chfl.postMessage({reply: "Attempting to flash with AVRGirl"});
         avrgirl.flash(hex, function (error) {
            if (error) {
                       console.error(error);
-                      _ch.postMessage({reply: error.message});
+                      _chfl.postMessage({reply: error.message});
 
 
            } else {
                       console.info('Avrgirl Programming complete!');
-                      _ch.postMessage({reply: "Avrgirl Programming complete!"});
-                      _ch=null;
+                      _chfl.postMessage({reply: "Avrgirl Programming complete!"});
+                      _chfl=null;
            }
          });
          
@@ -137,25 +164,31 @@ function flash(portName){
 function onPortOpen(){
     console.log("YESSIR THE PORT IS OPEN COS CAPS");
     _arduinoSerial = '';
+   console.log("check baud rate" + _sp.baudRate);
+    
 };
+
  
 function onData(d)
 {
- sendSerialMessage(d);
-   
+ sendSerialMessage(d);  
 };
  
 function onClose(){
     console.log("Port is closed, yo");
+    _chser.postMessage({reply: 'Serial Port now closed.'});
+    _sp = null;
+    _chser = null;
 };
 function onError(){
     console.log("something went horribly wrong");
 };
 
-function openSerial(port,ch){ 
+function openSerial(port){ 
     _sp= new SerialPort(port, {
-    baudrate: 9600
+    baudrate: _baud
     }); 
+
     _sp.on('open', onPortOpen);
     _sp.on('data', onData);
     _sp.on('close', onClose);
@@ -163,7 +196,7 @@ function openSerial(port,ch){
  
  };
 
-function sendSerialMessage(d,ch) {
+function sendSerialMessage(d) {
     // concatenating the string buffers sent via usb port
     var strD=d.toString();
     if (_bufferHold.length>0) {
@@ -195,7 +228,7 @@ function sendSerialMessage(d,ch) {
         
       
       // send the message to the client
-      _ch.postMessage({reply: _arduinoSerial});
+      _chser.postMessage({reply: _arduinoSerial});
       //console.log(_arduinoSerial);
       
         // reset the output string to an empty value

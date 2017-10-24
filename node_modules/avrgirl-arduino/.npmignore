@@ -1,0 +1,11 @@
+# Folders
+node_modules
+lib/progress.js
+coverage
+
+# DotFiles
+.DS_Store
+
+# Files
+*.swp
+*.log
