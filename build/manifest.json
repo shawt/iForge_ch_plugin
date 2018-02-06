@@ -22,11 +22,12 @@
       "*://weksletab.home/*",
       "*://trevor-stylistic-q702.home/*",
       "*://02211SHAWT.ads.d-e.org/*",
-      "*://weksletab.ads.d-e.org/*"
+      "*://weksletab.ads.d-e.org/*",
+      "*://aws.genlrn.com"
       ]
 
       },
-   "version": "1.6.1",
+   "version": "1.6.2",
    "icons":{
        "48":"assets/iForge48.png",
        "128":"assets/iForge128.png"
